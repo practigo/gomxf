@@ -1,27 +1,26 @@
 package main
 
 import (
-	"os"
-	"strconv"
+	"flag"
 
 	"github.com/practigo/gomxf"
 )
 
+var (
+	n           = flag.Int("n", -1, "klv elements to read")
+	showFill    = flag.Bool("f", false, "show Fill-Item")
+	showUnKnown = flag.Bool("u", false, "show Unknown KLV")
+)
+
 func main() {
-	filename := os.Args[1]
+	flag.Parse()
+	filename := flag.Arg(0)
 
-	var (
-		err error
-		n   = -1
-	)
-	if len(os.Args) > 2 {
-		n, err = strconv.Atoi(os.Args[2])
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	if err = gomxf.View(filename, n); err != nil {
+	if err := gomxf.View(filename, &gomxf.Config{
+		NRead:       *n,
+		ShowUnKnown: *showUnKnown,
+		ShowFill:    *showFill,
+	}); err != nil {
 		panic(err)
 	}
 }
