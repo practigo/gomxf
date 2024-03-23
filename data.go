@@ -14,6 +14,10 @@ var (
 		0x0d, 0x01, 0x02, 0x01, 0x01, 0x02}
 	KeyOP = [12]byte{0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01,
 		0x0d, 0x01, 0x02, 0x01}
+	KeySets = [13]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0xff, 0x01, 0x01, // [5] is xx for length
+		0x0d, 0x01, 0x01, 0x01, 0x01}
+	KeyEssenceElement = [12]byte{0x06, 0x0e, 0x2b, 0x34, 0x01, 0x02, 0x01, 0x01,
+		0x0d, 0x01, 0x03, 0x01}
 )
 
 const (
@@ -29,6 +33,7 @@ type KLVData interface {
 }
 
 type Dummy struct {
+	name   string
 	known  bool
 	filled bool
 }
@@ -42,13 +47,7 @@ func (d Dummy) IsFill() bool {
 }
 
 func (d Dummy) View() string {
-	if !d.known {
-		return "Unknown KLV ..."
-	}
-	if d.filled {
-		return "Fill Item ..."
-	}
-	return ""
+	return d.name + " ..."
 }
 
 type PackMeta struct {
@@ -193,11 +192,21 @@ func IsFillItem(key []byte) bool {
 	return bytes.Equal(key, KeyFillItem[:])
 }
 
+func isEssenceElement(key []byte) bool {
+	return bytes.Equal(key[:12], KeyEssenceElement[:])
+}
+
+func isMetaSets(key []byte) bool {
+	return bytes.Equal(key[:5], KeySets[:5]) && bytes.Equal(key[6:13], KeySets[6:])
+}
+
 func Decode4View(r io.ReaderAt, ks KLVs) (ds []KLVData, err error) {
+	// var es Batch
 	for _, k := range ks {
 		switch {
 		case IsFillItem(k.Key):
 			ds = append(ds, Dummy{
+				name:   "Fill Item",
 				known:  true,
 				filled: true,
 			})
@@ -207,8 +216,20 @@ func Decode4View(r io.ReaderAt, ks KLVs) (ds []KLVData, err error) {
 				return ds, err
 			}
 			ds = append(ds, pack)
+		case isMetaSets(k.Key):
+			ds = append(ds, Dummy{
+				name:  "Struct Metadata Set",
+				known: true,
+			})
+		case isEssenceElement(k.Key):
+			ds = append(ds, Dummy{
+				name:  "Essence Element",
+				known: true,
+			})
 		default:
-			ds = append(ds, Dummy{})
+			ds = append(ds, Dummy{
+				name: "Unknown KLV",
+			})
 		}
 	}
 	return
