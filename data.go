@@ -10,14 +10,27 @@ import (
 var (
 	KeyFillItem = [16]byte{0x06, 0x0e, 0x2b, 0x34, 0x01, 0x01, 0x01, 0x02,
 		0x03, 0x01, 0x02, 0x10, 0x01, 0x00, 0x00, 0x00}
-	KeyHeader = [14]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01,
-		0x0d, 0x01, 0x02, 0x01, 0x01, 0x02}
+	// Partition Pack, [13] is pack kind (0x02 ~ 0x04)
+	KeyPartitionPack = [13]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01,
+		0x0d, 0x01, 0x02, 0x01, 0x01}
+	// Operational Patterns
 	KeyOP = [12]byte{0x06, 0x0e, 0x2b, 0x34, 0x04, 0x01, 0x01, 0x01,
 		0x0d, 0x01, 0x02, 0x01}
-	KeySets = [13]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0xff, 0x01, 0x01, // [5] is xx for length
+	// Structural Metadata Sets, [5] is xx for length (0xff as placeholder)
+	KeyStructural = [13]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0xff, 0x01, 0x01,
 		0x0d, 0x01, 0x01, 0x01, 0x01}
+	// Primer Set, [14] is Version of the Primer Pack
+	KeyPrimer = [14]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01,
+		0x0d, 0x01, 0x02, 0x01, 0x01, 0x05}
+	// TODO: ? from ffmpeg mxfdec
 	KeyEssenceElement = [12]byte{0x06, 0x0e, 0x2b, 0x34, 0x01, 0x02, 0x01, 0x01,
 		0x0d, 0x01, 0x03, 0x01}
+	// Index Table Segment, [5] is xx for length (0xff as placeholder)
+	KeyIndexTable = [15]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0xff, 0x01, 0x01,
+		0x0d, 0x01, 0x02, 0x01, 0x01, 0x10, 0x01}
+	// Random Index Pack
+	KeyRIP = [15]byte{0x06, 0x0e, 0x2b, 0x34, 0x02, 0x05, 0x01, 0x01,
+		0x0d, 0x01, 0x02, 0x01, 0x01, 0x11, 0x01}
 )
 
 const (
@@ -143,7 +156,7 @@ func (p *Pack) View() string {
 }
 
 func IsPartitionPack(key []byte) bool {
-	return bytes.Equal(key[:13], KeyHeader[:13]) && key[13] >= 2 && key[13] <= 4
+	return bytes.Equal(key[:13], KeyPartitionPack[:]) && key[13] >= 2 && key[13] <= 4
 }
 
 func readData(r io.ReaderAt, klv *KLV) (bs []byte, err error) {
@@ -196,8 +209,42 @@ func isEssenceElement(key []byte) bool {
 	return bytes.Equal(key[:12], KeyEssenceElement[:])
 }
 
-func isMetaSets(key []byte) bool {
-	return bytes.Equal(key[:5], KeySets[:5]) && bytes.Equal(key[6:13], KeySets[6:])
+func isStructuralMeta(key []byte) bool {
+	return bytes.Equal(key[:5], KeyStructural[:5]) && bytes.Equal(key[6:13], KeyStructural[6:])
+}
+
+func whichMeta(v uint16) string {
+	switch v {
+	case 0x012f:
+		return "SM - Preface"
+	case 0x0130:
+		return "SM - Identification"
+	case 0x0118:
+		return "SM - Content Storage"
+	case 0x0123:
+		return "SM - Essence Container Data"
+	case 0x0136:
+		return "SM - Material Package"
+	case 0x0137:
+		return "SM - Source Package"
+	case 0x013b:
+		return "SM - Timeline Track"
+	case 0x010f:
+		return "SM - Sequence"
+	case 0x0111:
+		return "SM - Source Clip"
+	case 0x0114:
+		return "SM - Timecode Component"
+	case 0x0144:
+		return "SM - Multiple Descriptor"
+		// TODO: others
+	default:
+		return "Structural Metadata " + fmt.Sprintf("0x%04x", v)
+	}
+}
+
+func isIndexTable(key []byte) bool {
+	return bytes.Equal(key[:5], KeyIndexTable[:5]) && bytes.Equal(key[6:15], KeyIndexTable[6:])
 }
 
 func Decode4View(r io.ReaderAt, ks KLVs) (ds []KLVData, err error) {
@@ -216,14 +263,30 @@ func Decode4View(r io.ReaderAt, ks KLVs) (ds []KLVData, err error) {
 				return ds, err
 			}
 			ds = append(ds, pack)
-		case isMetaSets(k.Key):
+		case bytes.Equal(k.Key[:14], KeyPrimer[:]):
 			ds = append(ds, Dummy{
-				name:  "Struct Metadata Set",
+				name:  "Primer Pack",
+				known: true,
+			})
+		case isStructuralMeta(k.Key):
+			k14_15 := binary.BigEndian.Uint16(k.Key[13:15])
+			ds = append(ds, Dummy{
+				name:  whichMeta(k14_15),
+				known: true,
+			})
+		case isIndexTable(k.Key):
+			ds = append(ds, Dummy{
+				name:  "Index Table",
 				known: true,
 			})
 		case isEssenceElement(k.Key):
 			ds = append(ds, Dummy{
 				name:  "Essence Element",
+				known: true,
+			})
+		case bytes.Equal(k.Key[:15], KeyRIP[:]):
+			ds = append(ds, Dummy{
+				name:  "Random Index Pack",
 				known: true,
 			})
 		default:
