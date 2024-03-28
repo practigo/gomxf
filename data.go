@@ -243,6 +243,37 @@ func whichMeta(v uint16) string {
 	}
 }
 
+// MXF Local Set:  An MXF Set employing 2-byte Local Tag encoding.
+type LocalSet struct {
+	Tag   uint16
+	Len   int
+	Value []byte
+}
+
+func (l *LocalSet) View() string {
+	return fmt.Sprintf("Tag: %04x, len %d, value: %x", l.Tag, l.Len, l.Value)
+}
+
+func ParseLocalSets(bs []byte) []LocalSet {
+	i := 0
+	n := len(bs)
+	ret := make([]LocalSet, 0)
+	for {
+		if n-i < 4 { // 2+2
+			break
+		}
+		l := int(binary.BigEndian.Uint16(bs[i+2 : i+4]))
+		ret = append(ret, LocalSet{
+			Tag:   binary.BigEndian.Uint16(bs[i : i+2]),
+			Len:   l,
+			Value: bs[i+4 : i+4+l],
+		})
+
+		i += (4 + l)
+	}
+	return ret
+}
+
 func isIndexTable(key []byte) bool {
 	return bytes.Equal(key[:5], KeyIndexTable[:5]) && bytes.Equal(key[6:15], KeyIndexTable[6:])
 }
