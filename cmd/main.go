@@ -8,24 +8,22 @@ import (
 
 var (
 	n           = flag.Int("n", -1, "klv elements to read")
-	showFill    = flag.Bool("f", false, "show Fill-Item")
-	showUnKnown = flag.Bool("u", false, "show Unknown KLV")
-	roi         = flag.Int("i", -1, "explore the #i KLV in details")
-	showData    = flag.Bool("d", false, "show raw data fo $i KLV in []byte format")
-	set         = flag.Bool("s", false, "try to parse the #i KLV as Local Sets (Metadata)")
+	level       = flag.Int("l", 1, "parse level")
+	showUnKnown = flag.Bool("u", false, "show Unknown KLV (level 2+)")
+	max         = flag.Int("m", 32, "maximum number of KLVs to show under a partition (level 2+)")
+	koi         = flag.String("i", "", "KLV of interest to show in details, in format {part}:{idx}[:{style}]")
 )
 
 func main() {
 	flag.Parse()
 	filename := flag.Arg(0)
 
-	if err := gomxf.View(filename, &gomxf.Config{
+	if err := gomxf.Parse(filename, &gomxf.Config{
 		NRead:       *n,
+		Level:       *level,
 		ShowUnKnown: *showUnKnown,
-		ShowFill:    *showFill,
-		ROI:         *roi,
-		ShowRaw:     *showData,
-		AsSets:      *set,
+		Max:         *max,
+		KOI:         *koi,
 	}); err != nil {
 		panic(err)
 	}

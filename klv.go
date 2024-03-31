@@ -26,6 +26,7 @@ At        ValueStart
 */
 type KLV struct {
 	Key    []byte
+	Name   string // the recognized name from key which will be decoded later
 	Length int64
 	// representive and redundant
 	At         int64
@@ -152,4 +153,10 @@ func NewReader(filename string) (*Reader, error) {
 		r:    f,
 		size: info.Size(),
 	}, nil
+}
+
+func readData(r io.ReaderAt, klv *KLV) (bs []byte, err error) {
+	bs = make([]byte, klv.Length)
+	_, err = r.ReadAt(bs, klv.ValueStart)
+	return
 }
